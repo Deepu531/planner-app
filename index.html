@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <title>My Planner</title>
 
   <style>
@@ -128,6 +131,11 @@
 
 <body>
 
+<div>
+  <button onclick="googleLogin()">Login with Google</button>
+  <button onclick="logout()">Logout</button>
+</div>
+
 <h2>🗓️ My Planner</h2>
 
 <div class="top-bar">
@@ -146,6 +154,26 @@
 <div class="calendar" id="calendar"></div>
 
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCHnF1hZEAC1Hl4IH0RlsLPFw9zYbPTPN4",
+  authDomain: "planner-app-cd7ea.firebaseapp.com",
+  projectId: "planner-app-cd7ea",
+  storageBucket: "planner-app-cd7ea.firebasestorage.app",
+  messagingSenderId: "128214928364",
+  appId: "1:128214928364:web:ddf59a06e5da63f2450ec9"
+};
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let user = null;
+
+auth.onAuthStateChanged(u => {
+  user = u;
+  loadCalendar();
+});
+
 const today = new Date();
 let currentMonth = today.getMonth();
 let currentYear = today.getFullYear();
@@ -157,7 +185,7 @@ const progressDiv = document.getElementById("progress");
 
 const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-function loadCalendar() {
+async function loadCalendar() {
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
@@ -199,7 +227,19 @@ function loadCalendar() {
     dateNum.innerText = i;
     day.appendChild(dateNum);
 
-    let data = JSON.parse(localStorage.getItem(key)) || [];
+    let data = [];
+
+    if (user) {
+    const doc = await db.collection("tasks")
+    .doc(user.uid)
+    .collection("dates")
+    .doc(key)
+    .get();
+
+  if (doc.exists) {
+    data = doc.data().data;
+  }
+}
 
     // clean old data
     data = data.map(task => ({
@@ -229,7 +269,13 @@ function loadCalendar() {
 
       saveBtn.onclick = (e) => {
         e.stopPropagation();
-        localStorage.setItem(key, JSON.stringify(data));
+        if (user) {
+  	db.collection("tasks")
+    	.doc(user.uid)
+    	.collection("dates")
+    	.doc(key)
+    	.set({ data });
+	}
         expandedDay = null;
         loadCalendar();
       };
@@ -253,7 +299,14 @@ function loadCalendar() {
           checkbox.onclick = (e) => {
             e.stopPropagation();
             data[index].done = !data[index].done;
-            localStorage.setItem(key, JSON.stringify(data));
+            if (user) {
+  	    db.collection("tasks")
+    	    .doc(user.uid)
+    	    .collection("dates")
+    	    .doc(key)
+    	    .set({ data });
+	    }
+
             loadCalendar();
           };
 
@@ -291,6 +344,15 @@ function prevMonth() {
   loadCalendar();
 }
 
+function googleLogin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider);
+}
+
+function logout() {
+  auth.signOut();
+}
+
 function downloadData() {
   let data = JSON.stringify(localStorage);
   let blob = new Blob([data], {type: "application/json"});
@@ -300,7 +362,6 @@ function downloadData() {
   a.click();
 }
 
-loadCalendar();
 </script>
 
 </body>
