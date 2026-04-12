@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Planner</title>
+
+  <style>
+    body {
+      font-family: 'Segoe UI';
+      text-align: center;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+
+    h2 {
+      color: #38bdf8;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      max-width: 700px;
+      margin: auto;
+      align-items: center;
+    }
+
+    button {
+      padding: 6px 10px;
+      border: none;
+      border-radius: 8px;
+      background: #1e293b;
+      color: #e5e7eb;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+
+    button:hover {
+      background: #334155;
+    }
+
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      max-width: 700px;
+      margin: 20px auto;
+    }
+
+    .day-name {
+      font-weight: bold;
+      color: #94a3b8;
+    }
+
+    .day {
+      background: #1e293b;
+      border-radius: 12px;
+      min-height: 120px;
+      padding: 6px;
+      text-align: left;
+      font-size: 11px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      transition: all 0.2s ease;
+    }
+
+    .day:hover {
+      transform: translateY(-2px);
+    }
+
+    .expanded {
+      grid-column: span 2;
+      min-height: 220px;
+    }
+
+    .today {
+      border: 2px solid #38bdf8;
+    }
+
+    .date-number {
+      font-weight: bold;
+      color: #e2e8f0;
+    }
+
+    .task {
+      display: flex;
+      align-items: center;
+      font-size: 11px;
+      color: #cbd5f5;
+    }
+
+    .task input {
+      margin-right: 5px;
+    }
+
+    .done {
+      text-decoration: line-through;
+      color: #64748b;
+    }
+
+    .inline-input {
+      width: 95%;
+      margin: 3px 0;
+      padding: 5px;
+      border-radius: 6px;
+      border: none;
+      background: #334155;
+      color: #e5e7eb;
+      font-size: 11px;
+    }
+
+    .inline-input::placeholder {
+      color: #94a3b8;
+    }
+
+    .top-bar {
+      margin-top: 10px;
+    }
+
+    .search {
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      width: 200px;
+      background: #1e293b;
+      color: #e5e7eb;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>🗓️ My Planner</h2>
+
+<div class="top-bar">
+  <input type="text" id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
+  <button onclick="downloadData()">Backup</button>
+</div>
+
+<div class="header">
+  <button onclick="prevMonth()">⬅️</button>
+  <h3 id="monthYear"></h3>
+  <button onclick="nextMonth()">➡️</button>
+</div>
+
+<div id="progress"></div>
+
+<div class="calendar" id="calendar"></div>
+
+<script>
+const today = new Date();
+let currentMonth = today.getMonth();
+let currentYear = today.getFullYear();
+let expandedDay = null;
+
+const calendar = document.getElementById("calendar");
+const monthYear = document.getElementById("monthYear");
+const progressDiv = document.getElementById("progress");
+
+const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function loadCalendar() {
+  calendar.innerHTML = "";
+  monthYear.innerText = months[currentMonth] + " " + currentYear;
+
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const totalDays = new Date(currentYear, currentMonth+1, 0).getDate();
+
+  const search = document.getElementById("search").value.toLowerCase();
+
+  let totalTasks = 0;
+  let completed = 0;
+
+  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  days.forEach(d => {
+    const div = document.createElement("div");
+    div.className = "day-name";
+    div.innerText = d;
+    calendar.appendChild(div);
+  });
+
+  for (let i=0;i<firstDay;i++) {
+    calendar.appendChild(document.createElement("div"));
+  }
+
+  for (let i=1;i<=totalDays;i++) {
+    const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+    const day = document.createElement("div");
+    day.className = "day";
+
+    if (expandedDay === i) day.classList.add("expanded");
+
+    if (i===today.getDate() && currentMonth===today.getMonth() && currentYear===today.getFullYear()) {
+      day.classList.add("today");
+    }
+
+    day.onclick = () => toggleExpand(i);
+
+    const dateNum = document.createElement("div");
+    dateNum.className = "date-number";
+    dateNum.innerText = i;
+    day.appendChild(dateNum);
+
+    let data = JSON.parse(localStorage.getItem(key)) || [];
+
+    // clean old data
+    data = data.map(task => ({
+      text: task?.text || (typeof task === "string" ? task : ""),
+      done: task?.done || false
+    }));
+
+    if (expandedDay === i) {
+      while (data.length < 5) data.push({text:"", done:false});
+
+      data.forEach((task, index) => {
+        const input = document.createElement("input");
+        input.className = "inline-input";
+        input.value = task.text || "";
+
+        input.onclick = (e) => e.stopPropagation();
+
+        input.oninput = (e) => {
+          data[index].text = e.target.value;
+        };
+
+        day.appendChild(input);
+      });
+
+      const saveBtn = document.createElement("button");
+      saveBtn.innerText = "Save";
+
+      saveBtn.onclick = (e) => {
+        e.stopPropagation();
+        localStorage.setItem(key, JSON.stringify(data));
+        expandedDay = null;
+        loadCalendar();
+      };
+
+      day.appendChild(saveBtn);
+
+    } else {
+      data.forEach((task, index) => {
+        if (task.text && task.text.toLowerCase().includes(search)) {
+          totalTasks++;
+
+          const div = document.createElement("div");
+          div.className = "task";
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = task.done;
+
+          if (task.done) completed++;
+
+          checkbox.onclick = (e) => {
+            e.stopPropagation();
+            data[index].done = !data[index].done;
+            localStorage.setItem(key, JSON.stringify(data));
+            loadCalendar();
+          };
+
+          const span = document.createElement("span");
+          span.innerText = task.text;
+          if (task.done) span.classList.add("done");
+
+          div.appendChild(checkbox);
+          div.appendChild(span);
+          day.appendChild(div);
+        }
+      });
+    }
+
+    calendar.appendChild(day);
+  }
+
+  progressDiv.innerText = `Completed: ${completed}/${totalTasks}`;
+}
+
+function toggleExpand(day) {
+  expandedDay = expandedDay === day ? null : day;
+  loadCalendar();
+}
+
+function nextMonth() {
+  currentMonth = (currentMonth+1)%12;
+  if (currentMonth===0) currentYear++;
+  loadCalendar();
+}
+
+function prevMonth() {
+  currentMonth = (currentMonth-1+12)%12;
+  if (currentMonth===11) currentYear--;
+  loadCalendar();
+}
+
+function downloadData() {
+  let data = JSON.stringify(localStorage);
+  let blob = new Blob([data], {type: "application/json"});
+  let a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "planner_backup.json";
+  a.click();
+}
+
+loadCalendar();
+</script>
+
+</body>
+</html>
