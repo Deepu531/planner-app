@@ -58,7 +58,6 @@
       text-align: left;
       font-size: 11px;
       cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
     }
 
     .expanded {
@@ -120,20 +119,20 @@
 
 <h2>🗓️ My Planner</h2>
 
-<div class="top-bar">
-  <input type="text" id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
-</div>
-
 <div class="header">
   <button onclick="prevMonth()">⬅️</button>
   <h3 id="monthYear"></h3>
   <button onclick="nextMonth()">➡️</button>
 </div>
 
+<input type="text" id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
+
+<div id="calendar" class="calendar"></div>
+
 <div id="progress"></div>
-<div class="calendar" id="calendar"></div>
 
 <script>
+
 const firebaseConfig = {
   apiKey: "AIzaSyCHnF1hZEAC1Hl4IH0RlsLPFw9zYbPTPN4",
   authDomain: "planner-app-cd7ea.firebaseapp.com",
@@ -153,17 +152,47 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let expandedDay = null;
 
-// ✅ FIX: draft memory store
-let draftData = {};
-
 auth.onAuthStateChanged(u => {
   user = u;
   loadCalendar();
 });
 
+
+// ✅ FIXED GOOGLE LOGIN
+function googleLogin() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+
+  auth.signInWithPopup(provider)
+    .then(result => {
+      console.log("Login success:", result.user);
+    })
+    .catch(error => {
+      console.error("Popup failed:", error.message);
+
+      // fallback for GitHub Pages / blocked popups
+      auth.signInWithRedirect(provider);
+    });
+}
+
+// handle redirect login
+auth.getRedirectResult()
+  .then(result => {
+    if (result.user) {
+      console.log("Redirect login success:", result.user);
+    }
+  })
+  .catch(err => console.error(err));
+
+
+function logout() {
+  auth.signOut();
+}
+
+
+// ---------------- CALENDAR ----------------
+
 const calendar = document.getElementById("calendar");
 const monthYear = document.getElementById("monthYear");
-const progressDiv = document.getElementById("progress");
 
 const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -175,9 +204,6 @@ async function loadCalendar() {
   const totalDays = new Date(currentYear, currentMonth+1, 0).getDate();
 
   const search = document.getElementById("search").value.toLowerCase();
-
-  let totalTasks = 0;
-  let completed = 0;
 
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   days.forEach(d => {
@@ -210,34 +236,24 @@ async function loadCalendar() {
     dateNum.innerText = i;
     day.appendChild(dateNum);
 
-    // ✅ FIX: use draftData first
-    let data = draftData[key];
+    let data = [];
 
-    if (!data) {
-      data = [];
+    if (user) {
+      const doc = await db.collection("tasks")
+        .doc(user.uid)
+        .collection("dates")
+        .doc(key)
+        .get();
 
-      if (user) {
-        const doc = await db.collection("tasks")
-          .doc(user.uid)
-          .collection("dates")
-          .doc(key)
-          .get();
-
-        if (doc.exists) {
-          data = doc.data().data;
-        }
+      if (doc.exists) {
+        data = doc.data().data;
       }
-
-      draftData[key] = data;
     }
 
-    // normalize
     data = data.map(t => ({
       text: t?.text || "",
       done: t?.done || false
     }));
-
-    draftData[key] = data;
 
     if (expandedDay === i) {
 
@@ -248,11 +264,8 @@ async function loadCalendar() {
         input.className = "inline-input";
         input.value = task.text;
 
-        input.onclick = e => e.stopPropagation();
-
-        // ✅ FIX HERE
         input.oninput = (e) => {
-          draftData[key][index].text = e.target.value;
+          data[index].text = e.target.value;
         };
 
         day.appendChild(input);
@@ -269,7 +282,7 @@ async function loadCalendar() {
             .doc(user.uid)
             .collection("dates")
             .doc(key)
-            .set({ data: draftData[key] });
+            .set({ data });
         }
 
         expandedDay = null;
@@ -277,55 +290,10 @@ async function loadCalendar() {
       };
 
       day.appendChild(saveBtn);
-
-    } else {
-
-      data.forEach((task, index) => {
-
-        if (task.text && task.text.toLowerCase().includes(search)) {
-
-          totalTasks++;
-
-          const div = document.createElement("div");
-          div.className = "task";
-
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = task.done;
-
-          if (task.done) completed++;
-
-          checkbox.onclick = async (e) => {
-            e.stopPropagation();
-
-            draftData[key][index].done = !draftData[key][index].done;
-
-            if (user) {
-              await db.collection("tasks")
-                .doc(user.uid)
-                .collection("dates")
-                .doc(key)
-                .set({ data: draftData[key] });
-            }
-
-            loadCalendar();
-          };
-
-          const span = document.createElement("span");
-          span.innerText = task.text;
-          if (task.done) span.classList.add("done");
-
-          div.appendChild(checkbox);
-          div.appendChild(span);
-          day.appendChild(div);
-        }
-      });
     }
 
     calendar.appendChild(day);
   }
-
-  progressDiv.innerText = `Completed: ${completed}/${totalTasks}`;
 }
 
 function nextMonth() {
@@ -340,14 +308,6 @@ function prevMonth() {
   loadCalendar();
 }
 
-function googleLogin() {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider);
-}
-
-function logout() {
-  auth.signOut();
-}
 </script>
 
 </body>
