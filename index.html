@@ -10,32 +10,48 @@
   <style>
     body {
       font-family: 'Segoe UI';
-      text-align: center;
       background: #0f172a;
       color: #e5e7eb;
+      text-align: center;
+      margin: 0;
     }
 
     h2 { color: #38bdf8; }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      max-width: 700px;
-      margin: auto;
-      align-items: center;
-    }
-
     button {
-      padding: 6px 10px;
+      padding: 8px 12px;
       border: none;
       border-radius: 8px;
       background: #1e293b;
       color: #e5e7eb;
       cursor: pointer;
-      margin-top: 4px;
+      margin: 5px;
     }
 
     button:hover { background: #334155; }
+
+    /* LOGIN SCREEN */
+    #loginScreen {
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+
+    /* APP SCREEN */
+    #appScreen {
+      display: none;
+      padding: 10px;
+    }
+
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 700px;
+      margin: auto;
+    }
 
     .calendar {
       display: grid;
@@ -56,8 +72,8 @@
       min-height: 120px;
       padding: 6px;
       text-align: left;
-      font-size: 11px;
       cursor: pointer;
+      font-size: 11px;
     }
 
     .expanded {
@@ -77,7 +93,7 @@
       border-radius: 6px;
       border: none;
       background: #334155;
-      color: #e5e7eb;
+      color: white;
       font-size: 11px;
     }
   </style>
@@ -85,20 +101,22 @@
 
 <body>
 
-<button onclick="googleLogin()">Login with Google</button>
-<button onclick="logout()">Logout</button>
-
-<h2>🗓️ My Planner</h2>
-
-<div class="header">
-  <button onclick="prevMonth()">⬅️</button>
-  <h3 id="monthYear"></h3>
-  <button onclick="nextMonth()">➡️</button>
+<!-- 🔐 LOGIN SCREEN -->
+<div id="loginScreen">
+  <h2>🗓️ My Planner</h2>
+  <button onclick="googleLogin()">Login with Google</button>
 </div>
 
-<input id="search" placeholder="Search tasks..." oninput="loadCalendar()">
+<!-- 📅 APP SCREEN -->
+<div id="appScreen">
 
-<div id="calendar" class="calendar"></div>
+  <div class="top-bar">
+    <h3 id="monthYear"></h3>
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <div class="calendar" id="calendar"></div>
+</div>
 
 <script>
 
@@ -121,52 +139,52 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let expandedDay = null;
 
+const loginScreen = document.getElementById("loginScreen");
+const appScreen = document.getElementById("appScreen");
 const calendar = document.getElementById("calendar");
 const monthYear = document.getElementById("monthYear");
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 
-// ✅ FIX 1: wait for auth properly
+// 🔐 AUTH STATE CONTROL (IMPORTANT PART)
 auth.onAuthStateChanged(async (u) => {
   user = u;
 
   if (user) {
-    await loadCalendar();
+    loginScreen.style.display = "none";
+    appScreen.style.display = "block";
+    loadCalendar();
   } else {
-    calendar.innerHTML = "";
+    loginScreen.style.display = "flex";
+    appScreen.style.display = "none";
   }
 });
 
 
-// ---------------- LOGIN ----------------
-
+// 🔑 LOGIN
 function googleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();
 
   auth.signInWithPopup(provider)
-    .catch(() => {
-      auth.signInWithRedirect(provider);
-    });
+    .catch(() => auth.signInWithRedirect(provider));
 }
 
-auth.getRedirectResult().catch(console.error);
 
+// 🚪 LOGOUT
 function logout() {
   auth.signOut();
 }
 
 
-// ---------------- CALENDAR ----------------
-
+// 📅 CALENDAR
 async function loadCalendar() {
+
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
-
-  const search = document.getElementById("search").value.toLowerCase();
 
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   days.forEach(d => {
@@ -176,11 +194,11 @@ async function loadCalendar() {
     calendar.appendChild(div);
   });
 
-  for (let i = 0; i < firstDay; i++) {
+  for (let i=0;i<firstDay;i++) {
     calendar.appendChild(document.createElement("div"));
   }
 
-  for (let i = 1; i <= totalDays; i++) {
+  for (let i=1;i<=totalDays;i++) {
 
     const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
 
@@ -199,18 +217,16 @@ async function loadCalendar() {
     dateNum.className = "date-number";
     day.appendChild(dateNum);
 
-    // ✅ FIX 2: safe Firestore read
     let data = [];
 
     if (user) {
-      const docRef = db.collection("tasks")
+      const doc = await db.collection("tasks")
         .doc(user.uid)
         .collection("dates")
-        .doc(key);
+        .doc(key)
+        .get();
 
-      const doc = await docRef.get();
-
-      if (doc.exists && doc.data()?.data) {
+      if (doc.exists) {
         data = doc.data().data;
       }
     }
@@ -234,17 +250,14 @@ async function loadCalendar() {
       const saveBtn = document.createElement("button");
       saveBtn.innerText = "Save";
 
-      // ✅ FIX 3: proper save + await
       saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        if (user) {
-          await db.collection("tasks")
-            .doc(user.uid)
-            .collection("dates")
-            .doc(key)
-            .set({ data });
-        }
+        await db.collection("tasks")
+          .doc(user.uid)
+          .collection("dates")
+          .doc(key)
+          .set({ data });
 
         expandedDay = null;
         loadCalendar();
@@ -258,8 +271,7 @@ async function loadCalendar() {
 }
 
 
-// ---------------- NAV ----------------
-
+// NAV (optional if you had earlier)
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
