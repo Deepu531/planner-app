@@ -15,15 +15,6 @@
       color: #e5e7eb;
     }
 
-    button {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 10px;
-      background: #1e293b;
-      color: white;
-      cursor: pointer;
-    }
-
     #loginScreen {
       height: 100vh;
       display: flex;
@@ -35,6 +26,15 @@
       display: none;
       padding: 10px;
       text-align: center;
+    }
+
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      background: #1e293b;
+      color: white;
+      cursor: pointer;
     }
 
     .title {
@@ -117,16 +117,18 @@
 
 <body>
 
+<!-- LOGIN -->
 <div id="loginScreen">
   <button onclick="googleLogin()">Login with Google</button>
 </div>
 
+<!-- APP -->
 <div id="appScreen">
 
   <div class="title">🗓️ My Planner</div>
 
   <div class="top-bar">
-    <input id="search" class="search" placeholder="Search tasks..." oninput="render()">
+    <input id="search" class="search" placeholder="Search tasks..." oninput="renderCalendar()">
     <button onclick="logout()">Logout</button>
   </div>
 
@@ -152,7 +154,7 @@ const db = firebase.firestore();
 
 let user = null;
 let monthData = {};
-let openKey = null; // ONLY ONE SOURCE OF TRUTH
+let activeKey = null;
 
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
@@ -166,11 +168,13 @@ const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 // AUTH
 auth.onAuthStateChanged(async (u) => {
   user = u;
+
   if (user) {
     document.getElementById("loginScreen").style.display = "none";
     document.getElementById("appScreen").style.display = "block";
+
     await loadData();
-    render();
+    renderCalendar();
   }
 });
 
@@ -183,10 +187,9 @@ function logout() {
 }
 
 
-// LOAD
+// LOAD DATA
 async function loadData() {
   monthData = {};
-  if (!user) return;
 
   const snap = await db.collection("tasks")
     .doc(user.uid)
@@ -199,8 +202,8 @@ async function loadData() {
 }
 
 
-// RENDER (CLEAN + STABLE)
-function render() {
+// RENDER (STABLE CORE FIX)
+function renderCalendar() {
 
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
@@ -237,7 +240,7 @@ function render() {
     const search = document.getElementById("search").value.toLowerCase();
 
     // VIEW MODE
-    if (openKey !== key) {
+    if (activeKey !== key) {
       data.forEach(t => {
         if (t.text?.toLowerCase().includes(search)) {
           const div = document.createElement("div");
@@ -249,39 +252,42 @@ function render() {
       });
     }
 
-    // CLICK
+    // CLICK TOGGLE
     day.onclick = () => {
-      openKey = (openKey === key) ? null : key;
-      render();
+      activeKey = (activeKey === key) ? null : key;
+      renderCalendar();
     };
 
-    // EDIT MODE
-    if (openKey === key) {
+    // EDIT MODE (SAFE COPY BUFFER)
+    if (activeKey === key) {
 
-      let temp = monthData[key] ? [...monthData[key]] : [];
+      let buffer = JSON.parse(JSON.stringify(monthData[key] || []));
 
-      while (temp.length < 5) temp.push({ text: "", done: false });
+      while (buffer.length < 5) {
+        buffer.push({ text: "", done: false });
+      }
 
-      temp.slice(0,5).forEach((t, idx) => {
+      buffer.slice(0,5).forEach((t, idx) => {
 
         const input = document.createElement("input");
         input.className = "inline-input";
         input.value = t.text;
 
         input.oninput = (e) => {
-          temp[idx].text = e.target.value;
+          buffer[idx].text = e.target.value;
+          monthData[key] = buffer; // LIVE SYNC (IMPORTANT FIX)
         };
 
         day.appendChild(input);
       });
 
-      const save = document.createElement("button");
-      save.innerText = "Save";
+      const saveBtn = document.createElement("button");
+      saveBtn.innerText = "Save";
 
-      save.onclick = async (e) => {
+      saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        const cleaned = temp.filter(t => t.text.trim());
+        const cleaned = (monthData[key] || []).filter(t => t.text.trim());
 
         await db.collection("tasks")
           .doc(user.uid)
@@ -290,12 +296,12 @@ function render() {
           .set({ data: cleaned });
 
         monthData[key] = cleaned;
-        openKey = null;
+        activeKey = null;
 
-        render();
+        renderCalendar();
       };
 
-      day.appendChild(save);
+      day.appendChild(saveBtn);
     }
 
     calendar.appendChild(day);
@@ -310,7 +316,7 @@ function nextMonth() {
     currentMonth = 0;
     currentYear++;
   }
-  loadData().then(render);
+  loadData().then(renderCalendar);
 }
 
 function prevMonth() {
@@ -319,7 +325,7 @@ function prevMonth() {
     currentMonth = 11;
     currentYear--;
   }
-  loadData().then(render);
+  loadData().then(renderCalendar);
 }
 
 </script>
