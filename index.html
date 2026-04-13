@@ -47,6 +47,13 @@
       text-align: center;
     }
 
+    .title {
+      font-size: 26px;
+      font-weight: bold;
+      color: #38bdf8;
+      margin-top: 10px;
+    }
+
     .top-bar {
       display: flex;
       justify-content: space-between;
@@ -112,7 +119,7 @@
 
 <body>
 
-<!-- 🔐 LOGIN ONLY SCREEN -->
+<!-- 🔐 LOGIN SCREEN -->
 <div id="loginScreen">
   <button id="loginBtn" onclick="googleLogin()">Login with Google</button>
 </div>
@@ -120,12 +127,13 @@
 <!-- 📅 APP SCREEN -->
 <div id="appScreen">
 
+  <!-- ✅ TITLE MOVED HERE -->
+  <div class="title">🗓️ My Planner</div>
+
   <div class="top-bar">
     <input id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
     <button onclick="logout()">Logout</button>
   </div>
-
-  <h2>🗓️ My Planner</h2>
 
   <div class="top-bar">
     <button onclick="prevMonth()">⬅️</button>
@@ -166,7 +174,7 @@ const monthYear = document.getElementById("monthYear");
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 
-// 🔐 AUTH SWITCH (IMPORTANT)
+// 🔐 AUTH SWITCH
 auth.onAuthStateChanged(async (u) => {
   user = u;
 
@@ -196,15 +204,14 @@ function logout() {
 }
 
 
-// 📅 LOAD CALENDAR
+// 📅 CALENDAR
 async function loadCalendar() {
+
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
-
-  const search = document.getElementById("search").value.toLowerCase();
 
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   days.forEach(d => {
@@ -290,8 +297,6 @@ async function loadCalendar() {
   }
 }
 
-
-// NAV
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
