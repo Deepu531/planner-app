@@ -69,6 +69,13 @@
       margin: 20px auto;
     }
 
+    .day-name {
+      font-weight: bold;
+      color: #94a3b8;
+      text-align: center;
+      padding: 5px;
+    }
+
     .day {
       background: #1e293b;
       border-radius: 12px;
@@ -217,7 +224,7 @@ async function loadMonthData() {
 }
 
 
-// RENDER
+// RENDER CALENDAR
 function renderCalendar() {
 
   calendar.innerHTML = "";
@@ -226,7 +233,15 @@ function renderCalendar() {
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  const search = document.getElementById("search").value.toLowerCase();
+  // ⭐ FIX: WEEKDAY HEADER
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  days.forEach(d => {
+    const div = document.createElement("div");
+    div.className = "day-name";
+    div.innerText = d;
+    calendar.appendChild(div);
+  });
 
   for (let i = 0; i < firstDay; i++) {
     calendar.appendChild(document.createElement("div"));
@@ -243,6 +258,8 @@ function renderCalendar() {
     dateNum.className = "date-number";
     dateNum.innerText = i;
     day.appendChild(dateNum);
+
+    const search = document.getElementById("search").value.toLowerCase();
 
     let data = monthData[key] || [];
 
@@ -284,6 +301,7 @@ function renderCalendar() {
       }
 
       editData = editData.slice(0, 5);
+
       editBuffer[key] = editData;
 
       editData.forEach((task, index) => {
