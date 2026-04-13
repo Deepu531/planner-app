@@ -24,19 +24,11 @@
       cursor: pointer;
     }
 
-    button:hover { background: #334155; }
-
     #loginScreen {
       height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-    }
-
-    #loginBtn {
-      font-size: 20px;
-      padding: 16px 28px;
-      border-radius: 14px;
     }
 
     #appScreen {
@@ -77,11 +69,6 @@
       margin: 20px auto;
     }
 
-    .day-name {
-      font-weight: bold;
-      color: #94a3b8;
-    }
-
     .day {
       background: #1e293b;
       border-radius: 12px;
@@ -102,7 +89,6 @@
       font-size: 11px;
       color: #cbd5f5;
       margin: 2px 0;
-      word-break: break-word;
     }
 
     .done {
@@ -127,7 +113,7 @@
 
 <!-- LOGIN -->
 <div id="loginScreen">
-  <button id="loginBtn" onclick="googleLogin()">Login with Google</button>
+  <button onclick="googleLogin()">Login with Google</button>
 </div>
 
 <!-- APP -->
@@ -170,11 +156,9 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
 let expandedDay = null;
+let isEditing = false;
 
-// cache
 let monthData = {};
-
-// 🔥 FIX: temporary edit storage (MOST IMPORTANT)
 let editBuffer = {};
 
 const loginScreen = document.getElementById("loginScreen");
@@ -216,7 +200,7 @@ function logout() {
 }
 
 
-// LOAD ALL DATA ONCE
+// LOAD DATA
 async function loadMonthData() {
   monthData = {};
 
@@ -233,7 +217,7 @@ async function loadMonthData() {
 }
 
 
-// RENDER CALENDAR
+// RENDER
 function renderCalendar() {
 
   calendar.innerHTML = "";
@@ -242,20 +226,13 @@ function renderCalendar() {
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const search = document.getElementById("search").value.toLowerCase();
 
-  days.forEach(d => {
-    const div = document.createElement("div");
-    div.className = "day-name";
-    div.innerText = d;
-    calendar.appendChild(div);
-  });
-
-  for (let i=0;i<firstDay;i++) {
+  for (let i = 0; i < firstDay; i++) {
     calendar.appendChild(document.createElement("div"));
   }
 
-  for (let i=1;i<=totalDays;i++) {
+  for (let i = 1; i <= totalDays; i++) {
 
     const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
 
@@ -267,43 +244,38 @@ function renderCalendar() {
     dateNum.innerText = i;
     day.appendChild(dateNum);
 
-    const search = document.getElementById("search").value.toLowerCase();
-
     let data = monthData[key] || [];
 
     // VIEW MODE
     if (expandedDay !== i) {
-
       data.forEach(task => {
         if (task.text && task.text.toLowerCase().includes(search)) {
-
           const div = document.createElement("div");
           div.className = "task";
-
           if (task.done) div.classList.add("done");
-
           div.innerText = task.text;
-
           day.appendChild(div);
         }
       });
     }
 
-    // CLICK TO EDIT (IMPORTANT FIX)
+    // CLICK
     day.onclick = () => {
+      if (isEditing) return;
 
-      if (expandedDay !== i) {
-        expandedDay = i;
+      expandedDay = expandedDay === i ? null : i;
+
+      if (expandedDay === i) {
         editBuffer[key] = JSON.parse(JSON.stringify(monthData[key] || []));
-      } else {
-        expandedDay = null;
       }
 
       renderCalendar();
     };
 
-    // EDIT MODE (FIXED STABLE)
+    // EDIT MODE
     if (expandedDay === i) {
+
+      isEditing = true;
 
       let editData = editBuffer[key] || [];
 
@@ -312,7 +284,6 @@ function renderCalendar() {
       }
 
       editData = editData.slice(0, 5);
-
       editBuffer[key] = editData;
 
       editData.forEach((task, index) => {
@@ -345,6 +316,8 @@ function renderCalendar() {
         monthData[key] = cleaned;
 
         expandedDay = null;
+        isEditing = false;
+
         renderCalendar();
       };
 
