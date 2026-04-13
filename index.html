@@ -69,6 +69,7 @@
       margin: 20px auto;
     }
 
+    /* ✅ WEEKDAYS (kept as you wanted) */
     .day-name {
       font-weight: bold;
       color: #94a3b8;
@@ -163,8 +164,6 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
 let expandedDay = null;
-let isEditing = false;
-
 let monthData = {};
 let editBuffer = {};
 
@@ -224,7 +223,7 @@ async function loadMonthData() {
 }
 
 
-// RENDER CALENDAR
+// RENDER
 function renderCalendar() {
 
   calendar.innerHTML = "";
@@ -233,8 +232,8 @@ function renderCalendar() {
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
-  // ⭐ FIX: WEEKDAY HEADER
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // ⭐ WEEKDAYS (kept safe)
+  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   days.forEach(d => {
     const div = document.createElement("div");
@@ -276,13 +275,15 @@ function renderCalendar() {
       });
     }
 
-    // CLICK
+    // CLICK → smooth switch fix
     day.onclick = () => {
-      if (isEditing) return;
 
-      expandedDay = expandedDay === i ? null : i;
-
+      // if clicking same day → close
       if (expandedDay === i) {
+        expandedDay = null;
+      } 
+      else {
+        expandedDay = i;
         editBuffer[key] = JSON.parse(JSON.stringify(monthData[key] || []));
       }
 
@@ -292,8 +293,6 @@ function renderCalendar() {
     // EDIT MODE
     if (expandedDay === i) {
 
-      isEditing = true;
-
       let editData = editBuffer[key] || [];
 
       while (editData.length < 5) {
@@ -301,7 +300,6 @@ function renderCalendar() {
       }
 
       editData = editData.slice(0, 5);
-
       editBuffer[key] = editData;
 
       editData.forEach((task, index) => {
@@ -334,7 +332,6 @@ function renderCalendar() {
         monthData[key] = cleaned;
 
         expandedDay = null;
-        isEditing = false;
 
         renderCalendar();
       };
