@@ -5,44 +5,46 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
-  <title>My Planner</title>
+  <title>Planner</title>
 
   <style>
     body {
       font-family: 'Segoe UI';
+      margin: 0;
       background: #0f172a;
       color: #e5e7eb;
-      text-align: center;
-      margin: 0;
     }
 
-    h2 { color: #38bdf8; }
-
     button {
-      padding: 8px 12px;
+      padding: 10px 16px;
       border: none;
-      border-radius: 8px;
+      border-radius: 10px;
       background: #1e293b;
-      color: #e5e7eb;
+      color: white;
       cursor: pointer;
-      margin: 5px;
     }
 
     button:hover { background: #334155; }
 
-    /* LOGIN SCREEN */
+    /* 🔐 LOGIN SCREEN */
     #loginScreen {
       height: 100vh;
       display: flex;
-      flex-direction: column;
       justify-content: center;
       align-items: center;
     }
 
-    /* APP SCREEN */
+    #loginBtn {
+      font-size: 20px;
+      padding: 16px 28px;
+      border-radius: 14px;
+    }
+
+    /* 📅 APP SCREEN */
     #appScreen {
       display: none;
       padding: 10px;
+      text-align: center;
     }
 
     .top-bar {
@@ -51,6 +53,15 @@
       align-items: center;
       max-width: 700px;
       margin: auto;
+    }
+
+    .search {
+      padding: 8px;
+      border-radius: 8px;
+      border: none;
+      width: 200px;
+      background: #1e293b;
+      color: white;
     }
 
     .calendar {
@@ -101,21 +112,28 @@
 
 <body>
 
-<!-- 🔐 LOGIN SCREEN -->
+<!-- 🔐 LOGIN ONLY SCREEN -->
 <div id="loginScreen">
-  <h2>🗓️ My Planner</h2>
-  <button onclick="googleLogin()">Login with Google</button>
+  <button id="loginBtn" onclick="googleLogin()">Login with Google</button>
 </div>
 
 <!-- 📅 APP SCREEN -->
 <div id="appScreen">
 
   <div class="top-bar">
-    <h3 id="monthYear"></h3>
+    <input id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
     <button onclick="logout()">Logout</button>
   </div>
 
-  <div class="calendar" id="calendar"></div>
+  <h2>🗓️ My Planner</h2>
+
+  <div class="top-bar">
+    <button onclick="prevMonth()">⬅️</button>
+    <h3 id="monthYear"></h3>
+    <button onclick="nextMonth()">➡️</button>
+  </div>
+
+  <div id="calendar" class="calendar"></div>
 </div>
 
 <script>
@@ -141,13 +159,14 @@ let expandedDay = null;
 
 const loginScreen = document.getElementById("loginScreen");
 const appScreen = document.getElementById("appScreen");
+
 const calendar = document.getElementById("calendar");
 const monthYear = document.getElementById("monthYear");
 
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 
-// 🔐 AUTH STATE CONTROL (IMPORTANT PART)
+// 🔐 AUTH SWITCH (IMPORTANT)
 auth.onAuthStateChanged(async (u) => {
   user = u;
 
@@ -177,14 +196,15 @@ function logout() {
 }
 
 
-// 📅 CALENDAR
+// 📅 LOAD CALENDAR
 async function loadCalendar() {
-
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  const search = document.getElementById("search").value.toLowerCase();
 
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   days.forEach(d => {
@@ -271,7 +291,7 @@ async function loadCalendar() {
 }
 
 
-// NAV (optional if you had earlier)
+// NAV
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
