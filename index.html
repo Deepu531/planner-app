@@ -4,6 +4,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
   <title>My Planner</title>
 
   <style>
@@ -14,9 +15,7 @@
       color: #e5e7eb;
     }
 
-    h2 {
-      color: #38bdf8;
-    }
+    h2 { color: #38bdf8; }
 
     .header {
       display: flex;
@@ -36,9 +35,7 @@
       margin-top: 4px;
     }
 
-    button:hover {
-      background: #334155;
-    }
+    button:hover { background: #334155; }
 
     .calendar {
       display: grid;
@@ -62,11 +59,6 @@
       font-size: 11px;
       cursor: pointer;
       box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-      transition: all 0.2s ease;
-    }
-
-    .day:hover {
-      transform: translateY(-2px);
     }
 
     .expanded {
@@ -90,9 +82,7 @@
       color: #cbd5f5;
     }
 
-    .task input {
-      margin-right: 5px;
-    }
+    .task input { margin-right: 5px; }
 
     .done {
       text-decoration: line-through;
@@ -108,14 +98,6 @@
       background: #334155;
       color: #e5e7eb;
       font-size: 11px;
-    }
-
-    .inline-input::placeholder {
-      color: #94a3b8;
-    }
-
-    .top-bar {
-      margin-top: 10px;
     }
 
     .search {
@@ -140,7 +122,6 @@
 
 <div class="top-bar">
   <input type="text" id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
-  <button onclick="downloadData()">Backup</button>
 </div>
 
 <div class="header">
@@ -150,7 +131,6 @@
 </div>
 
 <div id="progress"></div>
-
 <div class="calendar" id="calendar"></div>
 
 <script>
@@ -162,22 +142,24 @@ const firebaseConfig = {
   messagingSenderId: "128214928364",
   appId: "1:128214928364:web:ddf59a06e5da63f2450ec9"
 };
+
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 
 let user = null;
+let currentMonth = new Date().getMonth();
+let currentYear = new Date().getFullYear();
+let expandedDay = null;
+
+// ✅ FIX: draft memory store
+let draftData = {};
 
 auth.onAuthStateChanged(u => {
   user = u;
   loadCalendar();
 });
-
-const today = new Date();
-let currentMonth = today.getMonth();
-let currentYear = today.getFullYear();
-let expandedDay = null;
 
 const calendar = document.getElementById("calendar");
 const monthYear = document.getElementById("monthYear");
@@ -210,55 +192,67 @@ async function loadCalendar() {
   }
 
   for (let i=1;i<=totalDays;i++) {
+
     const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+
     const day = document.createElement("div");
     day.className = "day";
 
     if (expandedDay === i) day.classList.add("expanded");
 
-    if (i===today.getDate() && currentMonth===today.getMonth() && currentYear===today.getFullYear()) {
-      day.classList.add("today");
-    }
-
-    day.onclick = () => toggleExpand(i);
+    day.onclick = () => {
+      expandedDay = expandedDay === i ? null : i;
+      loadCalendar();
+    };
 
     const dateNum = document.createElement("div");
     dateNum.className = "date-number";
     dateNum.innerText = i;
     day.appendChild(dateNum);
 
-    let data = [];
+    // ✅ FIX: use draftData first
+    let data = draftData[key];
 
-    if (user) {
-    const doc = await db.collection("tasks")
-    .doc(user.uid)
-    .collection("dates")
-    .doc(key)
-    .get();
+    if (!data) {
+      data = [];
 
-  if (doc.exists) {
-    data = doc.data().data;
-  }
-}
+      if (user) {
+        const doc = await db.collection("tasks")
+          .doc(user.uid)
+          .collection("dates")
+          .doc(key)
+          .get();
 
-    // clean old data
-    data = data.map(task => ({
-      text: task?.text || (typeof task === "string" ? task : ""),
-      done: task?.done || false
+        if (doc.exists) {
+          data = doc.data().data;
+        }
+      }
+
+      draftData[key] = data;
+    }
+
+    // normalize
+    data = data.map(t => ({
+      text: t?.text || "",
+      done: t?.done || false
     }));
 
+    draftData[key] = data;
+
     if (expandedDay === i) {
+
       while (data.length < 5) data.push({text:"", done:false});
 
       data.forEach((task, index) => {
         const input = document.createElement("input");
         input.className = "inline-input";
-        input.value = task.text || "";
+        input.value = task.text;
 
-        input.onclick = (e) => e.stopPropagation();
+        input.onclick = e => e.stopPropagation();
 
+        // ✅ FIX HERE
         input.oninput = (e) => {
-          data[index].text = e.target.value;
+          draftData[key][index].text = e.target.value;
         };
 
         day.appendChild(input);
@@ -267,15 +261,17 @@ async function loadCalendar() {
       const saveBtn = document.createElement("button");
       saveBtn.innerText = "Save";
 
-      saveBtn.onclick = (e) => {
+      saveBtn.onclick = async (e) => {
         e.stopPropagation();
+
         if (user) {
-  	db.collection("tasks")
-    	.doc(user.uid)
-    	.collection("dates")
-    	.doc(key)
-    	.set({ data });
-	}
+          await db.collection("tasks")
+            .doc(user.uid)
+            .collection("dates")
+            .doc(key)
+            .set({ data: draftData[key] });
+        }
+
         expandedDay = null;
         loadCalendar();
       };
@@ -283,8 +279,11 @@ async function loadCalendar() {
       day.appendChild(saveBtn);
 
     } else {
+
       data.forEach((task, index) => {
+
         if (task.text && task.text.toLowerCase().includes(search)) {
+
           totalTasks++;
 
           const div = document.createElement("div");
@@ -296,16 +295,18 @@ async function loadCalendar() {
 
           if (task.done) completed++;
 
-          checkbox.onclick = (e) => {
+          checkbox.onclick = async (e) => {
             e.stopPropagation();
-            data[index].done = !data[index].done;
+
+            draftData[key][index].done = !draftData[key][index].done;
+
             if (user) {
-  	    db.collection("tasks")
-    	    .doc(user.uid)
-    	    .collection("dates")
-    	    .doc(key)
-    	    .set({ data });
-	    }
+              await db.collection("tasks")
+                .doc(user.uid)
+                .collection("dates")
+                .doc(key)
+                .set({ data: draftData[key] });
+            }
 
             loadCalendar();
           };
@@ -325,11 +326,6 @@ async function loadCalendar() {
   }
 
   progressDiv.innerText = `Completed: ${completed}/${totalTasks}`;
-}
-
-function toggleExpand(day) {
-  expandedDay = expandedDay === day ? null : day;
-  loadCalendar();
 }
 
 function nextMonth() {
@@ -352,16 +348,6 @@ function googleLogin() {
 function logout() {
   auth.signOut();
 }
-
-function downloadData() {
-  let data = JSON.stringify(localStorage);
-  let blob = new Blob([data], {type: "application/json"});
-  let a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "planner_backup.json";
-  a.click();
-}
-
 </script>
 
 </body>
