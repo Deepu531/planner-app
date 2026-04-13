@@ -118,12 +118,10 @@
 
 <body>
 
-<!-- LOGIN -->
 <div id="loginScreen">
   <button onclick="googleLogin()">Login with Google</button>
 </div>
 
-<!-- APP -->
 <div id="appScreen">
 
   <div class="title">🗓️ My Planner</div>
@@ -163,7 +161,8 @@ let user = null;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
-let activeKey = null;       // ✅ FIXED STATE SYSTEM
+let activeKey = null;
+
 let monthData = {};
 let editBuffer = {};
 
@@ -223,13 +222,12 @@ async function loadMonthData() {
 }
 
 
-// RENDER CALENDAR
+// RENDER CALENDAR (SAFE VERSION)
 function renderCalendar() {
 
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
-  // WEEKDAYS (SAFE)
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   days.forEach(d => {
@@ -253,28 +251,29 @@ function renderCalendar() {
     const day = document.createElement("div");
     day.className = "day";
 
-    const dateNum = document.createElement("div");
-    dateNum.className = "date-number";
-    dateNum.innerText = i;
-    day.appendChild(dateNum);
+    const title = document.createElement("div");
+    title.className = "date-number";
+    title.innerText = i;
+    day.appendChild(title);
+
+    let data = monthData[key] || [];
 
     const search = document.getElementById("search").value.toLowerCase();
-    let data = monthData[key] || [];
 
     // VIEW MODE
     if (activeKey !== key) {
-      data.forEach(task => {
-        if (task.text && task.text.toLowerCase().includes(search)) {
+      data.forEach(t => {
+        if (t.text?.toLowerCase().includes(search)) {
           const div = document.createElement("div");
           div.className = "task";
-          if (task.done) div.classList.add("done");
-          div.innerText = task.text;
+          if (t.done) div.classList.add("done");
+          div.innerText = t.text;
           day.appendChild(div);
         }
       });
     }
 
-    // CLICK → OPEN/CLOSE EDIT
+    // CLICK HANDLER (STABLE SWITCH)
     day.onclick = () => {
 
       if (activeKey === key) {
@@ -290,23 +289,23 @@ function renderCalendar() {
     // EDIT MODE
     if (activeKey === key) {
 
-      let editData = editBuffer[key] || [];
+      let arr = editBuffer[key] || [];
 
-      while (editData.length < 5) {
-        editData.push({ text: "", done: false });
+      while (arr.length < 5) {
+        arr.push({ text: "", done: false });
       }
 
-      editData = editData.slice(0, 5);
-      editBuffer[key] = editData;
+      arr = arr.slice(0, 5);
+      editBuffer[key] = arr;
 
-      editData.forEach((task, index) => {
+      arr.forEach((t, idx) => {
 
         const input = document.createElement("input");
         input.className = "inline-input";
-        input.value = task.text || "";
+        input.value = t.text || "";
 
         input.oninput = (e) => {
-          editBuffer[key][index].text = e.target.value;
+          editBuffer[key][idx].text = e.target.value;
         };
 
         day.appendChild(input);
@@ -318,7 +317,7 @@ function renderCalendar() {
       saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        const cleaned = editBuffer[key].filter(t => t.text.trim() !== "");
+        const cleaned = editBuffer[key].filter(x => x.text.trim() !== "");
 
         await db.collection("tasks")
           .doc(user.uid)
@@ -329,6 +328,7 @@ function renderCalendar() {
         monthData[key] = cleaned;
 
         activeKey = null;
+
         renderCalendar();
       };
 
