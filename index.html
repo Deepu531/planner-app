@@ -95,7 +95,7 @@
     .date-number {
       font-weight: bold;
       color: #e2e8f0;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
     }
 
     .task {
@@ -168,10 +168,9 @@ const db = firebase.firestore();
 let user = null;
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
-
 let expandedDay = null;
 
-// ✅ IMPORTANT CACHE (FIX FOR YOUR ISSUE)
+// cache (IMPORTANT FOR STABILITY)
 let monthData = {};
 
 const loginScreen = document.getElementById("loginScreen");
@@ -182,7 +181,7 @@ const monthYear = document.getElementById("monthYear");
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 
-// 🔐 AUTH
+// AUTH
 auth.onAuthStateChanged(async (u) => {
   user = u;
 
@@ -190,8 +189,8 @@ auth.onAuthStateChanged(async (u) => {
     loginScreen.style.display = "none";
     appScreen.style.display = "block";
 
-    await loadMonthData();   // 🔥 LOAD ONCE
-    renderCalendar();        // 🔥 THEN RENDER
+    await loadMonthData();
+    renderCalendar();
   } else {
     loginScreen.style.display = "flex";
     appScreen.style.display = "none";
@@ -199,7 +198,7 @@ auth.onAuthStateChanged(async (u) => {
 });
 
 
-// 🔑 LOGIN
+// LOGIN
 function googleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();
   auth.signInWithPopup(provider)
@@ -207,30 +206,30 @@ function googleLogin() {
 }
 
 
-// 🚪 LOGOUT
+// LOGOUT
 function logout() {
   auth.signOut();
 }
 
 
-// 🔥 LOAD ALL DATA FOR MONTH ONCE (FIX)
+// LOAD DATA ONCE PER MONTH
 async function loadMonthData() {
   monthData = {};
 
   if (!user) return;
 
-  const snapshot = await db.collection("tasks")
+  const snap = await db.collection("tasks")
     .doc(user.uid)
     .collection("dates")
     .get();
 
-  snapshot.forEach(doc => {
+  snap.forEach(doc => {
     monthData[doc.id] = doc.data().data;
   });
 }
 
 
-// 📅 RENDER CALENDAR (NO FIRESTORE INSIDE LOOP)
+// RENDER CALENDAR
 function renderCalendar() {
 
   calendar.innerHTML = "";
@@ -268,35 +267,43 @@ function renderCalendar() {
 
     const search = document.getElementById("search").value.toLowerCase();
 
-    // show tasks
-    data.forEach(task => {
-      if (task.text && task.text.toLowerCase().includes(search)) {
-        const div = document.createElement("div");
-        div.className = "task";
-        if (task.done) div.classList.add("done");
-        div.innerText = task.text;
-        day.appendChild(div);
-      }
-    });
+    // ================= VIEW MODE =================
+    if (expandedDay !== i) {
 
-    // click to edit
-    day.onclick = () => {
-      expandedDay = expandedDay === i ? null : i;
-      renderCalendar();
-    };
+      data.forEach(task => {
+        if (task.text && task.text.toLowerCase().includes(search)) {
 
-    // edit mode
+          const div = document.createElement("div");
+          div.className = "task";
+
+          if (task.done) div.classList.add("done");
+
+          div.innerText = task.text;
+
+          day.appendChild(div);
+        }
+      });
+    }
+
+    // ================= EDIT MODE =================
     if (expandedDay === i) {
 
-      while (data.length < 5) data.push({text:"", done:false});
+      let editData = [...data];
 
-      data.forEach((task, index) => {
+      while (editData.length < 5) {
+        editData.push({ text: "", done: false });
+      }
+
+      editData = editData.slice(0, 5);
+
+      editData.forEach((task, index) => {
+
         const input = document.createElement("input");
         input.className = "inline-input";
-        input.value = task.text;
+        input.value = task.text || "";
 
         input.oninput = (e) => {
-          data[index].text = e.target.value;
+          editData[index].text = e.target.value;
         };
 
         day.appendChild(input);
@@ -308,13 +315,15 @@ function renderCalendar() {
       saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
+        const cleaned = editData.filter(t => t.text.trim() !== "");
+
         await db.collection("tasks")
           .doc(user.uid)
           .collection("dates")
           .doc(key)
-          .set({ data });
+          .set({ data: cleaned });
 
-        monthData[key] = data;   // update cache
+        monthData[key] = cleaned;
 
         expandedDay = null;
         renderCalendar();
@@ -323,12 +332,18 @@ function renderCalendar() {
       day.appendChild(saveBtn);
     }
 
+    // toggle edit
+    day.onclick = () => {
+      expandedDay = expandedDay === i ? null : i;
+      renderCalendar();
+    };
+
     calendar.appendChild(day);
   }
 }
 
 
-// 🔄 NAV
+// NAV
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
