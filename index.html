@@ -65,27 +65,9 @@
       min-height: 220px;
     }
 
-    .today {
-      border: 2px solid #38bdf8;
-    }
-
     .date-number {
       font-weight: bold;
       color: #e2e8f0;
-    }
-
-    .task {
-      display: flex;
-      align-items: center;
-      font-size: 11px;
-      color: #cbd5f5;
-    }
-
-    .task input { margin-right: 5px; }
-
-    .done {
-      text-decoration: line-through;
-      color: #64748b;
     }
 
     .inline-input {
@@ -98,24 +80,13 @@
       color: #e5e7eb;
       font-size: 11px;
     }
-
-    .search {
-      padding: 8px;
-      border-radius: 8px;
-      border: none;
-      width: 200px;
-      background: #1e293b;
-      color: #e5e7eb;
-    }
   </style>
 </head>
 
 <body>
 
-<div>
-  <button onclick="googleLogin()">Login with Google</button>
-  <button onclick="logout()">Logout</button>
-</div>
+<button onclick="googleLogin()">Login with Google</button>
+<button onclick="logout()">Logout</button>
 
 <h2>🗓️ My Planner</h2>
 
@@ -125,11 +96,9 @@
   <button onclick="nextMonth()">➡️</button>
 </div>
 
-<input type="text" id="search" class="search" placeholder="Search tasks..." oninput="loadCalendar()">
+<input id="search" placeholder="Search tasks..." oninput="loadCalendar()">
 
 <div id="calendar" class="calendar"></div>
-
-<div id="progress"></div>
 
 <script>
 
@@ -152,37 +121,36 @@ let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 let expandedDay = null;
 
-auth.onAuthStateChanged(u => {
+const calendar = document.getElementById("calendar");
+const monthYear = document.getElementById("monthYear");
+
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+
+// ✅ FIX 1: wait for auth properly
+auth.onAuthStateChanged(async (u) => {
   user = u;
-  loadCalendar();
+
+  if (user) {
+    await loadCalendar();
+  } else {
+    calendar.innerHTML = "";
+  }
 });
 
 
-// ✅ FIXED GOOGLE LOGIN
+// ---------------- LOGIN ----------------
+
 function googleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();
 
   auth.signInWithPopup(provider)
-    .then(result => {
-      console.log("Login success:", result.user);
-    })
-    .catch(error => {
-      console.error("Popup failed:", error.message);
-
-      // fallback for GitHub Pages / blocked popups
+    .catch(() => {
       auth.signInWithRedirect(provider);
     });
 }
 
-// handle redirect login
-auth.getRedirectResult()
-  .then(result => {
-    if (result.user) {
-      console.log("Redirect login success:", result.user);
-    }
-  })
-  .catch(err => console.error(err));
-
+auth.getRedirectResult().catch(console.error);
 
 function logout() {
   auth.signOut();
@@ -191,17 +159,12 @@ function logout() {
 
 // ---------------- CALENDAR ----------------
 
-const calendar = document.getElementById("calendar");
-const monthYear = document.getElementById("monthYear");
-
-const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
 async function loadCalendar() {
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const totalDays = new Date(currentYear, currentMonth+1, 0).getDate();
+  const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   const search = document.getElementById("search").value.toLowerCase();
 
@@ -213,11 +176,11 @@ async function loadCalendar() {
     calendar.appendChild(div);
   });
 
-  for (let i=0;i<firstDay;i++) {
+  for (let i = 0; i < firstDay; i++) {
     calendar.appendChild(document.createElement("div"));
   }
 
-  for (let i=1;i<=totalDays;i++) {
+  for (let i = 1; i <= totalDays; i++) {
 
     const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
 
@@ -232,28 +195,25 @@ async function loadCalendar() {
     };
 
     const dateNum = document.createElement("div");
-    dateNum.className = "date-number";
     dateNum.innerText = i;
+    dateNum.className = "date-number";
     day.appendChild(dateNum);
 
+    // ✅ FIX 2: safe Firestore read
     let data = [];
 
     if (user) {
-      const doc = await db.collection("tasks")
+      const docRef = db.collection("tasks")
         .doc(user.uid)
         .collection("dates")
-        .doc(key)
-        .get();
+        .doc(key);
 
-      if (doc.exists) {
+      const doc = await docRef.get();
+
+      if (doc.exists && doc.data()?.data) {
         data = doc.data().data;
       }
     }
-
-    data = data.map(t => ({
-      text: t?.text || "",
-      done: t?.done || false
-    }));
 
     if (expandedDay === i) {
 
@@ -274,6 +234,7 @@ async function loadCalendar() {
       const saveBtn = document.createElement("button");
       saveBtn.innerText = "Save";
 
+      // ✅ FIX 3: proper save + await
       saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
@@ -296,15 +257,24 @@ async function loadCalendar() {
   }
 }
 
+
+// ---------------- NAV ----------------
+
 function nextMonth() {
-  currentMonth = (currentMonth+1)%12;
-  if (currentMonth===0) currentYear++;
+  currentMonth++;
+  if (currentMonth > 11) {
+    currentMonth = 0;
+    currentYear++;
+  }
   loadCalendar();
 }
 
 function prevMonth() {
-  currentMonth = (currentMonth-1+12)%12;
-  if (currentMonth===11) currentYear--;
+  currentMonth--;
+  if (currentMonth < 0) {
+    currentMonth = 11;
+    currentYear--;
+  }
   loadCalendar();
 }
 
