@@ -26,7 +26,7 @@
 
     button:hover { background: #334155; }
 
-    /* 🔐 LOGIN SCREEN */
+    /* LOGIN */
     #loginScreen {
       height: 100vh;
       display: flex;
@@ -40,7 +40,7 @@
       border-radius: 14px;
     }
 
-    /* 📅 APP SCREEN */
+    /* APP */
     #appScreen {
       display: none;
       padding: 10px;
@@ -94,14 +94,22 @@
       font-size: 11px;
     }
 
-    .expanded {
-      grid-column: span 2;
-      min-height: 220px;
-    }
-
     .date-number {
       font-weight: bold;
       color: #e2e8f0;
+      margin-bottom: 4px;
+    }
+
+    .task {
+      font-size: 11px;
+      color: #cbd5f5;
+      margin-bottom: 2px;
+      word-break: break-word;
+    }
+
+    .task.done {
+      text-decoration: line-through;
+      color: #64748b;
     }
 
     .inline-input {
@@ -119,15 +127,14 @@
 
 <body>
 
-<!-- 🔐 LOGIN SCREEN -->
+<!-- LOGIN -->
 <div id="loginScreen">
   <button id="loginBtn" onclick="googleLogin()">Login with Google</button>
 </div>
 
-<!-- 📅 APP SCREEN -->
+<!-- APP -->
 <div id="appScreen">
 
-  <!-- ✅ TITLE MOVED HERE -->
   <div class="title">🗓️ My Planner</div>
 
   <div class="top-bar">
@@ -174,7 +181,7 @@ const monthYear = document.getElementById("monthYear");
 const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
 
-// 🔐 AUTH SWITCH
+// AUTH SWITCH
 auth.onAuthStateChanged(async (u) => {
   user = u;
 
@@ -189,22 +196,21 @@ auth.onAuthStateChanged(async (u) => {
 });
 
 
-// 🔑 LOGIN
+// LOGIN
 function googleLogin() {
   const provider = new firebase.auth.GoogleAuthProvider();
-
   auth.signInWithPopup(provider)
     .catch(() => auth.signInWithRedirect(provider));
 }
 
 
-// 🚪 LOGOUT
+// LOGOUT
 function logout() {
   auth.signOut();
 }
 
 
-// 📅 CALENDAR
+// CALENDAR
 async function loadCalendar() {
 
   calendar.innerHTML = "";
@@ -214,6 +220,7 @@ async function loadCalendar() {
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
   days.forEach(d => {
     const div = document.createElement("div");
     div.className = "day-name";
@@ -231,13 +238,6 @@ async function loadCalendar() {
 
     const day = document.createElement("div");
     day.className = "day";
-
-    if (expandedDay === i) day.classList.add("expanded");
-
-    day.onclick = () => {
-      expandedDay = expandedDay === i ? null : i;
-      loadCalendar();
-    };
 
     const dateNum = document.createElement("div");
     dateNum.innerText = i;
@@ -258,6 +258,33 @@ async function loadCalendar() {
       }
     }
 
+    data = data.map(t => ({
+      text: t?.text || "",
+      done: t?.done || false
+    }));
+
+    // ✅ ALWAYS SHOW TASKS
+    data.forEach(task => {
+      if (task.text.trim() !== "") {
+
+        const div = document.createElement("div");
+        div.className = "task";
+
+        if (task.done) div.classList.add("done");
+
+        div.innerText = task.text;
+
+        day.appendChild(div);
+      }
+    });
+
+    // click to edit
+    day.onclick = () => {
+      expandedDay = i === expandedDay ? null : i;
+      loadCalendar();
+    };
+
+    // edit mode
     if (expandedDay === i) {
 
       while (data.length < 5) data.push({text:"", done:false});
@@ -297,6 +324,8 @@ async function loadCalendar() {
   }
 }
 
+
+// NAV
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
