@@ -15,6 +15,15 @@
       color: #e5e7eb;
     }
 
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      background: #1e293b;
+      color: white;
+      cursor: pointer;
+    }
+
     #loginScreen {
       height: 100vh;
       display: flex;
@@ -24,17 +33,8 @@
 
     #appScreen {
       display: none;
-      padding: 10px;
       text-align: center;
-    }
-
-    button {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 10px;
-      background: #1e293b;
-      color: white;
-      cursor: pointer;
+      padding: 10px;
     }
 
     .title {
@@ -67,12 +67,6 @@
       gap: 10px;
       max-width: 700px;
       margin: 20px auto;
-    }
-
-    .day-name {
-      font-weight: bold;
-      color: #94a3b8;
-      text-align: center;
     }
 
     .day {
@@ -143,22 +137,32 @@
 
 <script>
 
-firebase.initializeApp({
+const firebaseConfig = {
   apiKey: "AIzaSyCHnF1hZEAC1Hl4IH0RlsLPFw9zYbPTPN4",
   authDomain: "planner-app-cd7ea.firebaseapp.com",
-  projectId: "planner-app-cd7ea"
-});
+  projectId: "planner-app-cd7ea",
+  storageBucket: "planner-app-cd7ea.firebasestorage.app",
+  messagingSenderId: "128214928364",
+  appId: "1:128214928364:web:ddf59a06e5da63f2450ec9"
+};
+
+firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
 const db = firebase.firestore();
 
 let user = null;
-let monthData = {};
-let activeKey = null;
-
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
+let expandedDay = null;
+let isEditing = false;
+
+let monthData = {};
+let editBuffer = {};
+
+const loginScreen = document.getElementById("loginScreen");
+const appScreen = document.getElementById("appScreen");
 const calendar = document.getElementById("calendar");
 const monthYear = document.getElementById("monthYear");
 
@@ -170,26 +174,37 @@ auth.onAuthStateChanged(async (u) => {
   user = u;
 
   if (user) {
-    document.getElementById("loginScreen").style.display = "none";
-    document.getElementById("appScreen").style.display = "block";
+    loginScreen.style.display = "none";
+    appScreen.style.display = "block";
 
-    await loadData();
+    await loadMonthData();
     renderCalendar();
+  } else {
+    loginScreen.style.display = "flex";
+    appScreen.style.display = "none";
   }
 });
 
+
+// LOGIN
 function googleLogin() {
-  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+    .catch(() => auth.signInWithRedirect(provider));
 }
 
+
+// LOGOUT
 function logout() {
   auth.signOut();
 }
 
 
 // LOAD DATA
-async function loadData() {
+async function loadMonthData() {
   monthData = {};
+
+  if (!user) return;
 
   const snap = await db.collection("tasks")
     .doc(user.uid)
@@ -202,22 +217,16 @@ async function loadData() {
 }
 
 
-// RENDER (STABLE CORE FIX)
+// RENDER
 function renderCalendar() {
 
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
-  const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  days.forEach(d => {
-    const div = document.createElement("div");
-    div.className = "day-name";
-    div.innerText = d;
-    calendar.appendChild(div);
-  });
-
   const firstDay = new Date(currentYear, currentMonth, 1).getDay();
   const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+  const search = document.getElementById("search").value.toLowerCase();
 
   for (let i = 0; i < firstDay; i++) {
     calendar.appendChild(document.createElement("div"));
@@ -230,52 +239,61 @@ function renderCalendar() {
     const day = document.createElement("div");
     day.className = "day";
 
-    const title = document.createElement("div");
-    title.className = "date-number";
-    title.innerText = i;
-    day.appendChild(title);
+    const dateNum = document.createElement("div");
+    dateNum.className = "date-number";
+    dateNum.innerText = i;
+    day.appendChild(dateNum);
 
     let data = monthData[key] || [];
 
-    const search = document.getElementById("search").value.toLowerCase();
-
     // VIEW MODE
-    if (activeKey !== key) {
-      data.forEach(t => {
-        if (t.text?.toLowerCase().includes(search)) {
+    if (expandedDay !== i) {
+      data.forEach(task => {
+        if (task.text && task.text.toLowerCase().includes(search)) {
           const div = document.createElement("div");
           div.className = "task";
-          if (t.done) div.classList.add("done");
-          div.innerText = t.text;
+          if (task.done) div.classList.add("done");
+          div.innerText = task.text;
           day.appendChild(div);
         }
       });
     }
 
-    // CLICK TOGGLE
+    // CLICK
     day.onclick = () => {
-      activeKey = (activeKey === key) ? null : key;
+      if (isEditing) return;
+
+      expandedDay = expandedDay === i ? null : i;
+
+      if (expandedDay === i) {
+        editBuffer[key] = JSON.parse(JSON.stringify(monthData[key] || []));
+      }
+
       renderCalendar();
     };
 
-    // EDIT MODE (SAFE COPY BUFFER)
-    if (activeKey === key) {
+    // EDIT MODE
+    if (expandedDay === i) {
 
-      let buffer = JSON.parse(JSON.stringify(monthData[key] || []));
+      isEditing = true;
 
-      while (buffer.length < 5) {
-        buffer.push({ text: "", done: false });
+      let editData = editBuffer[key] || [];
+
+      while (editData.length < 5) {
+        editData.push({ text: "", done: false });
       }
 
-      buffer.slice(0,5).forEach((t, idx) => {
+      editData = editData.slice(0, 5);
+      editBuffer[key] = editData;
+
+      editData.forEach((task, index) => {
 
         const input = document.createElement("input");
         input.className = "inline-input";
-        input.value = t.text;
+        input.value = task.text || "";
 
         input.oninput = (e) => {
-          buffer[idx].text = e.target.value;
-          monthData[key] = buffer; // LIVE SYNC (IMPORTANT FIX)
+          editBuffer[key][index].text = e.target.value;
         };
 
         day.appendChild(input);
@@ -287,7 +305,7 @@ function renderCalendar() {
       saveBtn.onclick = async (e) => {
         e.stopPropagation();
 
-        const cleaned = (monthData[key] || []).filter(t => t.text.trim());
+        const cleaned = editBuffer[key].filter(t => t.text.trim() !== "");
 
         await db.collection("tasks")
           .doc(user.uid)
@@ -296,7 +314,9 @@ function renderCalendar() {
           .set({ data: cleaned });
 
         monthData[key] = cleaned;
-        activeKey = null;
+
+        expandedDay = null;
+        isEditing = false;
 
         renderCalendar();
       };
@@ -309,14 +329,14 @@ function renderCalendar() {
 }
 
 
-// MONTH CHANGE
+// NAV
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
     currentMonth = 0;
     currentYear++;
   }
-  loadData().then(renderCalendar);
+  loadMonthData().then(renderCalendar);
 }
 
 function prevMonth() {
@@ -325,7 +345,7 @@ function prevMonth() {
     currentMonth = 11;
     currentYear--;
   }
-  loadData().then(renderCalendar);
+  loadMonthData().then(renderCalendar);
 }
 
 </script>
