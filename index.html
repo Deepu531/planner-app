@@ -69,7 +69,6 @@
       margin: 20px auto;
     }
 
-    /* ✅ WEEKDAYS (kept as you wanted) */
     .day-name {
       font-weight: bold;
       color: #94a3b8;
@@ -160,10 +159,11 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let user = null;
+
 let currentMonth = new Date().getMonth();
 let currentYear = new Date().getFullYear();
 
-let expandedDay = null;
+let activeKey = null;       // ✅ FIXED STATE SYSTEM
 let monthData = {};
 let editBuffer = {};
 
@@ -223,16 +223,13 @@ async function loadMonthData() {
 }
 
 
-// RENDER
+// RENDER CALENDAR
 function renderCalendar() {
 
   calendar.innerHTML = "";
   monthYear.innerText = months[currentMonth] + " " + currentYear;
 
-  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
-  const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
-
-  // ⭐ WEEKDAYS (kept safe)
+  // WEEKDAYS (SAFE)
   const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   days.forEach(d => {
@@ -241,6 +238,9 @@ function renderCalendar() {
     div.innerText = d;
     calendar.appendChild(div);
   });
+
+  const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+  const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
   for (let i = 0; i < firstDay; i++) {
     calendar.appendChild(document.createElement("div"));
@@ -259,11 +259,10 @@ function renderCalendar() {
     day.appendChild(dateNum);
 
     const search = document.getElementById("search").value.toLowerCase();
-
     let data = monthData[key] || [];
 
     // VIEW MODE
-    if (expandedDay !== i) {
+    if (activeKey !== key) {
       data.forEach(task => {
         if (task.text && task.text.toLowerCase().includes(search)) {
           const div = document.createElement("div");
@@ -275,15 +274,13 @@ function renderCalendar() {
       });
     }
 
-    // CLICK → smooth switch fix
+    // CLICK → OPEN/CLOSE EDIT
     day.onclick = () => {
 
-      // if clicking same day → close
-      if (expandedDay === i) {
-        expandedDay = null;
-      } 
-      else {
-        expandedDay = i;
+      if (activeKey === key) {
+        activeKey = null;
+      } else {
+        activeKey = key;
         editBuffer[key] = JSON.parse(JSON.stringify(monthData[key] || []));
       }
 
@@ -291,7 +288,7 @@ function renderCalendar() {
     };
 
     // EDIT MODE
-    if (expandedDay === i) {
+    if (activeKey === key) {
 
       let editData = editBuffer[key] || [];
 
@@ -331,8 +328,7 @@ function renderCalendar() {
 
         monthData[key] = cleaned;
 
-        expandedDay = null;
-
+        activeKey = null;
         renderCalendar();
       };
 
@@ -344,7 +340,7 @@ function renderCalendar() {
 }
 
 
-// NAV
+// NAVIGATION
 function nextMonth() {
   currentMonth++;
   if (currentMonth > 11) {
